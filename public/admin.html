@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Admin</title><link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet"><link rel="stylesheet" href="/assets/styles.css"></head>
+<body class="min-h-screen bg-gradient-to-b from-indigo-900 to-blue-900 text-white">
+  <nav class="p-4 flex justify-between"><div>Admin Dashboard</div><div><button id="logout" class="bg-white/10 px-3 py-1 rounded">Logout</button></div></nav>
+  <main class="max-w-4xl mx-auto p-6">
+    <section class="bg-white/5 p-4 rounded mb-4">
+      <h3 class="text-lg mb-2">Create User</h3>
+      <input id="u_username" placeholder="username" class="p-2 rounded bg-white/10 w-full mb-2"/>
+      <input id="u_password" placeholder="password" class="p-2 rounded bg-white/10 w-full mb-2"/>
+      <select id="u_role" class="p-2 rounded bg-white/10 w-full mb-2"><option value="admin">Admin</option><option value="faculty">Faculty</option><option value="student">Student</option></select>
+      <input id="u_linked" placeholder="linkedStudentId (optional)" class="p-2 rounded bg-white/10 w-full mb-2"/>
+      <button id="createUser" class="px-3 py-2 bg-indigo-500 rounded">Create</button>
+    </section>
+
+    <section class="mb-6 bg-white/5 p-4 rounded">
+      <h3 class="text-lg mb-2">Create Class</h3>
+      <input id="className" placeholder="Class name" class="p-2 rounded bg-white/10 w-full mb-2"/>
+      <button id="createClass" class="px-3 py-2 bg-indigo-500 rounded">Create</button>
+    </section>
+
+    <section class="mb-6 bg-white/5 p-4 rounded">
+      <h3 class="text-lg mb-2">Students</h3>
+      <select id="classSelect" class="p-2 rounded bg-white/10 w-full mb-2"></select>
+      <input id="sname" placeholder="Student name" class="p-2 rounded bg-white/10 w-full mb-2"/>
+      <input id="sroll" placeholder="Roll number" class="p-2 rounded bg-white/10 w-full mb-2"/>
+      <div id="faceCapture" class="my-2">
+        <button type="button" id="startCamera" class="px-3 py-2 bg-blue-500 rounded mb-2">Capture Face</button>
+        <div id="cameraContainer" class="hidden">
+          <video id="video" width="320" height="240" autoplay class="rounded"></video>
+          <button type="button" id="clickPhoto" class="px-3 py-2 bg-green-500 rounded mt-2">Take Picture</button>
+          <canvas id="canvas" width="320" height="240" class="hidden"></canvas>
+          <img id="photo" src="" alt="Captured photo" class="hidden rounded mt-2"/>
+          <input type="hidden" id="simage" />
+        </div>
+      </div>
+      <button id="addStudent" class="px-3 py-2 bg-indigo-500 rounded">Add Student</button>
+    </section>
+
+    <section class="bg-white/5 p-4 rounded mt-6">
+      <h3 class="text-lg mb-2">Manage Students</h3>
+      <select id="manageStudentClassSelect" class="p-2 rounded bg-white/10 w-full mb-2"></select>
+      <button id="loadManageStudents" class="px-3 py-2 bg-indigo-500 rounded mb-2">Load Students</button>
+      <div id="manageStudentsList" class="space-y-2"></div>
+    </section>
+  </main>
+
+<script>
+const token = localStorage.getItem('token'); if(!token) location.href='/login.html';
+document.getElementById('logout').onclick = ()=>{ localStorage.clear(); location.href='/login.html'; };
+async function api(path, opts={}){ opts.headers = opts.headers||{}; opts.headers['Content-Type']='application/json'; opts.headers['Authorization'] = 'Bearer ' + token; if(opts.body) opts.body = JSON.stringify(opts.body); const res = await fetch(path, opts); if(!res.ok) throw new Error(await res.text()); return res.json(); }
+
+document.getElementById('createUser').onclick = async ()=>{
+  try{
+    const body = { username: document.getElementById('u_username').value, password: document.getElementById('u_password').value, role: document.getElementById('u_role').value };
+    if(document.getElementById('u_linked').value) body.linkedStudentId = document.getElementById('u_linked').value;
+    await api('/api/users', { method: 'POST', body });
+    alert('User created');
+  }catch(e){ alert('Error: '+e.message); }
+};
+
+async function loadClasses(){
+  const cs = await api('/api/classes');
+  const sel = document.getElementById('classSelect');
+  sel.innerHTML = cs.map(c=>`<option value="${c._id}">${c.name}</option>`).join('');
+  const sel2 = document.getElementById('manageStudentClassSelect');
+  sel2.innerHTML = cs.map(c=>`<option value="${c._id}">${c.name}</option>`).join('');
+}
+
+document.getElementById('createClass').onclick = async ()=>{
+  await api('/api/classes',{method:'POST', body:{name:document.getElementById('className').value}});
+  await loadClasses(); alert('Created');
+};
+
+const startCameraButton = document.getElementById('startCamera');
+const cameraContainer = document.getElementById('cameraContainer');
+const video = document.getElementById('video');
+const clickPhotoButton = document.getElementById('clickPhoto');
+const canvas = document.getElementById('canvas');
+const photo = document.getElementById('photo');
+const simage = document.getElementById('simage');
+
+startCameraButton.addEventListener('click', async () => {
+  cameraContainer.classList.remove('hidden');
+  startCameraButton.classList.add('hidden');
+  let stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  video.srcObject = stream;
+});
+
+clickPhotoButton.addEventListener('click', () => {
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  let data_url = canvas.toDataURL('image/jpeg');
+  photo.src = data_url;
+  simage.value = data_url;
+  photo.classList.remove('hidden');
+  cameraContainer.classList.add('hidden');
+  video.srcObject.getTracks().forEach(track => track.stop());
+});
+
+document.getElementById('addStudent').onclick = async ()=>{
+  try{
+    const body = {
+      name: document.getElementById('sname').value,
+      rollNumber: document.getElementById('sroll').value,
+      classId: document.getElementById('classSelect').value,
+      imageData: document.getElementById('simage').value
+    };
+    const res = await api('/api/students',{method:'POST', body});
+    alert('Added: ' + res.student.name);
+    document.getElementById('sname').value = '';
+    document.getElementById('sroll').value = '';
+    document.getElementById('simage').value = '';
+    photo.classList.add('hidden');
+    startCameraButton.classList.remove('hidden');
+  }catch(e){
+    alert('Error: '+e.message);
+  }
+};
+
+document.getElementById('loadManageStudents').onclick = async () => {
+  const classId = document.getElementById('manageStudentClassSelect').value;
+  const students = await api('/api/students?classId=' + classId);
+  const list = document.getElementById('manageStudentsList');
+  list.innerHTML = '';
+  students.forEach(s => {
+    const div = document.createElement('div');
+    div.innerHTML = `<div class="flex justify-between items-center p-2 bg-white/10 rounded">
+                      <span>${s.rollNumber} - ${s.name}</span>
+                      <button data-id="${s._id}" class="delete-student-btn px-3 py-1 bg-red-500 rounded">Delete</button>
+                    </div>`;
+    list.appendChild(div);
+  });
+};
+
+document.getElementById('manageStudentsList').addEventListener('click', async (e) => {
+  if (e.target.classList.contains('delete-student-btn')) {
+    const studentId = e.target.getAttribute('data-id');
+    if (confirm('Are you sure you want to delete this student?')) {
+      try {
+        await api('/api/students/' + studentId, { method: 'DELETE' });
+        alert('Student deleted successfully');
+        // Refresh the list
+        document.getElementById('loadManageStudents').click();
+      } catch (err) {
+        alert('Error deleting student: ' + err.message);
+      }
+    }
+  }
+});
+
+loadClasses();
+</script>
+
+</body></html>

@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Faculty Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body class="min-h-screen bg-gradient-to-b from-indigo-900 to-blue-900 text-white">
+  <nav class="p-4 flex justify-between">
+    <div>Faculty Dashboard</div>
+    <div><button id="logout" class="bg-white/10 px-3 py-1 rounded">Logout</button></div>
+  </nav>
+  <main class="max-w-5xl mx-auto p-6">
+    <section class="mb-6 bg-white/5 p-4 rounded">
+      <h3 class="text-lg mb-2">Create Class</h3>
+      <input id="className" placeholder="Class name" class="p-2 rounded bg-white/10 w-full mb-2"/>
+      <button id="createClass" class="px-3 py-2 bg-indigo-500 rounded">Create</button>
+    </section>
+
+    <section class="mb-6 bg-white/5 p-4 rounded">
+      <h3 class="text-lg mb-2">Students</h3>
+      <select id="classSelect" class="p-2 rounded bg-white/10 w-full mb-2"></select>
+      <input id="sname" placeholder="Student name" class="p-2 rounded bg-white/10 w-full mb-2"/>
+      <input id="sroll" placeholder="Roll number" class="p-2 rounded bg-white/10 w-full mb-2"/>
+      <div id="faceCapture" class="my-2">
+        <button type="button" id="startCamera" class="px-3 py-2 bg-blue-500 rounded mb-2">Capture Face</button>
+        <div id="cameraContainer" class="hidden">
+          <video id="video" width="320" height="240" autoplay class="rounded"></video>
+          <button type="button" id="clickPhoto" class="px-3 py-2 bg-green-500 rounded mt-2">Take Picture</button>
+          <canvas id="canvas" width="320" height="240" class="hidden"></canvas>
+          <img id="photo" src="" alt="Captured photo" class="hidden rounded mt-2"/>
+          <input type="hidden" id="simage" />
+        </div>
+      </div>
+      <button id="addStudent" class="px-3 py-2 bg-indigo-500 rounded">Add Student</button>
+    </section>
+
+    <section class="bg-white/5 p-4 rounded">
+      <h3 class="text-lg mb-2">Mark Attendance</h3>
+      <input type="date" id="dateInput" class="p-2 rounded bg-white/10 mb-2"/>
+      <button id="loadStudents" class="px-3 py-2 bg-indigo-500 rounded mb-2">Load</button>
+      <div id="studentsList" class="space-y-2"></div>
+      <button id="saveAtt" class="mt-3 px-3 py-2 bg-green-500 rounded">Save Attendance</button>
+    </section>
+
+    <section class="bg-white/5 p-4 rounded mt-6">
+      <h3 class="text-lg mb-2">Take Attendance by Face</h3>
+      <div id="faceAttendanceCapture" class="my-2">
+        <button type="button" id="startFaceAttendanceCamera" class="px-3 py-2 bg-blue-500 rounded mb-2">Start Camera</button>
+        <div id="faceAttendanceCameraContainer" class="hidden">
+          <video id="faceAttendanceVideo" width="320" height="240" autoplay class="rounded"></video>
+          <button type="button" id="captureAndMark" class="px-3 py-2 bg-green-500 rounded mt-2">Capture & Mark Attendance</button>
+          <canvas id="faceAttendanceCanvas" width="320" height="240" class="hidden"></canvas>
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+const token = localStorage.getItem('token'); if(!token) location.href='/login.html';
+document.getElementById('logout').onclick=()=>{localStorage.clear();location.href='/login.html'};
+
+async function api(path, opts={}){
+  opts.headers = opts.headers||{};
+  opts.headers['Content-Type'] = 'application/json';
+  opts.headers['Authorization'] = 'Bearer '+token;
+  if(opts.body) opts.body = JSON.stringify(opts.body);
+  const res = await fetch(path, opts);
+  if(!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function loadClasses(){
+  const cs = await api('/api/classes');
+  const sel = document.getElementById('classSelect');
+  sel.innerHTML = cs.map(c=>`<option value="${c._id}">${c.name}</option>`).join('');
+}
+
+document.getElementById('createClass').onclick = async ()=>{
+  await api('/api/classes',{method:'POST', body:{name:document.getElementById('className').value}});
+  await loadClasses(); alert('Created');
+};
+
+const startCameraButton = document.getElementById('startCamera');
+const cameraContainer = document.getElementById('cameraContainer');
+const video = document.getElementById('video');
+const clickPhotoButton = document.getElementById('clickPhoto');
+const canvas = document.getElementById('canvas');
+const photo = document.getElementById('photo');
+const simage = document.getElementById('simage');
+
+startCameraButton.addEventListener('click', async () => {
+  cameraContainer.classList.remove('hidden');
+  startCameraButton.classList.add('hidden');
+  let stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  video.srcObject = stream;
+});
+
+clickPhotoButton.addEventListener('click', () => {
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  let data_url = canvas.toDataURL('image/jpeg');
+  photo.src = data_url;
+  simage.value = data_url;
+  photo.classList.remove('hidden');
+  cameraContainer.classList.add('hidden');
+  video.srcObject.getTracks().forEach(track => track.stop());
+});
+
+document.getElementById('addStudent').onclick = async ()=>{
+  try{
+    const body = {
+      name: document.getElementById('sname').value,
+      rollNumber: document.getElementById('sroll').value,
+      classId: document.getElementById('classSelect').value,
+      imageData: document.getElementById('simage').value
+    };
+    const res = await api('/api/students',{method:'POST', body});
+    alert('Added: ' + res.student.name);
+    document.getElementById('sname').value = '';
+    document.getElementById('sroll').value = '';
+    document.getElementById('simage').value = '';
+    photo.classList.add('hidden');
+    startCameraButton.classList.remove('hidden');
+  }catch(e){
+    alert('Error: '+e.message);
+  }
+};
+
+document.getElementById('loadStudents').onclick = async ()=>{
+  const classId = document.getElementById('classSelect').value;
+  const date = document.getElementById('dateInput').value;
+  const students = await api('/api/students?classId='+classId);
+  const existing = await fetch('/api/attendance?classId='+classId+'&date='+date,{headers:{'Authorization':'Bearer '+token}}).then(r=>r.ok?r.json():null).catch(()=>null);
+  const list = document.getElementById('studentsList'); list.innerHTML='';
+  students.forEach(s=>{
+    const status = existing && existing.entries.find(e=>String(e.studentId)===String(s._id))?.status || 'Present';
+    const div = document.createElement('div');
+    div.innerHTML = `<label class="flex justify-between items-center p-2 bg-white/10 rounded"><span>${s.rollNumber || s.rollNumber} - ${s.name}</span><select data-id="${s._id}" class="p-1 rounded bg-white/10"><option ${status==='Present'?'selected':''}>Present</option><option ${status==='Absent'?'selected':''}>Absent</option></select></label>`;
+    list.appendChild(div);
+  });
+};
+
+document.getElementById('saveAtt').onclick = async ()=>{
+  const classId = document.getElementById('classSelect').value;
+  const date = document.getElementById('dateInput').value;
+  const entries = [...document.querySelectorAll('#studentsList select')].map(s=>({ studentId: s.getAttribute('data-id'), status: s.value }));
+  if (!classId || !date || entries.length === 0) {
+    alert('Please select a class, a date, and load students before saving attendance.');
+    return;
+  }
+  await api('/api/attendance',{method:'POST', body:{classId, date, entries}});
+  alert('Saved');
+};
+
+const startFaceAttendanceCameraButton = document.getElementById('startFaceAttendanceCamera');
+const faceAttendanceCameraContainer = document.getElementById('faceAttendanceCameraContainer');
+const faceAttendanceVideo = document.getElementById('faceAttendanceVideo');
+const captureAndMarkButton = document.getElementById('captureAndMark');
+const faceAttendanceCanvas = document.getElementById('faceAttendanceCanvas');
+
+startFaceAttendanceCameraButton.addEventListener('click', async () => {
+  faceAttendanceCameraContainer.classList.remove('hidden');
+  startFaceAttendanceCameraButton.classList.add('hidden');
+  let stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  faceAttendanceVideo.srcObject = stream;
+});
+
+captureAndMarkButton.addEventListener('click', async () => {
+  const classId = document.getElementById('classSelect').value;
+  const date = document.getElementById('dateInput').value;
+
+  if (!classId || !date) {
+    alert('Please select a class and a date first.');
+    return;
+  }
+
+  faceAttendanceCanvas.getContext('2d').drawImage(faceAttendanceVideo, 0, 0, faceAttendanceCanvas.width, faceAttendanceCanvas.height);
+  const imageData = faceAttendanceCanvas.toDataURL('image/jpeg');
+
+  try {
+    const res = await api('/api/attendance/face', { method: 'POST', body: { classId, imageData, date } });
+    alert(res.message);
+    // Reload the students to show the updated attendance
+    document.getElementById('loadStudents').click();
+  } catch (e) {
+    const error = JSON.parse(e.message);
+    alert('Error: ' + error.error);
+  } finally {
+    // Stop the camera
+    faceAttendanceVideo.srcObject.getTracks().forEach(track => track.stop());
+    faceAttendanceCameraContainer.classList.add('hidden');
+    startFaceAttendanceCameraButton.classList.remove('hidden');
+  }
+});
+
+loadClasses();
+</script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Student Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body class="min-h-screen bg-gradient-to-b from-blue-900 to-blue-800 text-white"></body>
+  <nav class="p-4 flex justify-between"><div>Student Dashboard</div><div><button id="logout" class="bg-white/10 px-3 py-1 rounded">Logout</button></div></nav>
+  <main class="max-w-4xl mx-auto p-6 space-y-6">
+    <section class="bg-white/5 p-4 rounded"><h3 class="text-lg mb-2">My Profile</h3><p><strong>Name:</strong> <span id="studentName"></span></p><p><strong>Roll No:</strong> <span id="studentRoll"></span></p><p><strong>Class:</strong> <span id="studentClass"></span></p></section>
+    <section class="bg-white/5 p-4 rounded"><h3 class="text-lg mb-2">Attendance Summary</h3><p><strong>Overall:</strong> <span id="attendancePercent">-</span>%</p><p><strong>Present:</strong> <span id="presentCount">0</span></p><p><strong>Absent:</strong> <span id="absentCount">0</span></p></section>
+    <section class="bg-white/5 p-4 rounded"><h3 class="text-lg mb-2">Attendance History</h3><div id="historyList" class="space-y-2"></div></section>
+  </main>
+
+<script>
+const token = localStorage.getItem('token');
+if(!token) location.href='/login.html';
+document.getElementById('logout').onclick = ()=>{ localStorage.clear(); location.href='/login.html'; };
+
+async function api(path, opts={}){
+  opts.headers = opts.headers||{};
+  opts.headers['Authorization'] = 'Bearer ' + token;
+  if(opts.body) opts.body = JSON.stringify(opts.body), opts.method = opts.method || 'POST';
+  const res = await fetch(path, opts);
+  if(!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function loadProfileAndAttendance(){
+  const data = await api('/api/student/me');
+  const student = data.student;
+  document.getElementById('studentName').textContent = student.name;
+  document.getElementById('studentRoll').textContent = student.rollNumber || student.rollNo || 'N/A';
+  document.getElementById('studentClass').textContent = student.classId?.name || student.className || 'N/A';
+
+  const history = data.attendance || [];
+  let present = 0, absent = 0;
+  const list = document.getElementById('historyList'); list.innerHTML = '';
+  history.forEach(doc=>{
+    const entry = doc.entries.find(e=>String(e.studentId)===String(student._id) || String(e.studentId)===String(student._id));
+    const status = entry ? entry.status : 'Unknown';
+    if(status==='Present') present++; else if(status==='Absent') absent++;
+    const div = document.createElement('div'); div.className='p-2 bg-white/10 rounded flex justify-between';
+    div.innerHTML = `<span>${doc.date}</span><span>${status}</span>`;
+    list.appendChild(div);
+  });
+
+  const percent = history.length ? Math.round((present/history.length)*100) : 0;
+  document.getElementById('attendancePercent').textContent = percent;
+  document.getElementById('presentCount').textContent = present;
+  document.getElementById('absentCount').textContent = absent;
+}
+
+loadProfileAndAttendance();
+</script>
+</body>
+</html>
