@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Faculty Dashboard - School Attendance</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body class="bg-gray-100 text-gray-800 font-poppins">
+  <div class="flex h-screen">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white shadow-md">
+      <div class="p-6">
+        <h1 class="text-2xl font-bold text-indigo-600">Attendance</h1>
+      </div>
+      <nav class="mt-6">
+        <a href="/faculty.html" class="flex items-center px-6 py-3 text-gray-700 bg-gray-200"><i class="fas fa-clipboard-list mr-3"></i> Mark Attendance</a>
+        <a href="/manage-classes.html" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-200"><i class="fas fa-users-cog mr-3"></i> Manage Classes</a>
+      </nav>
+      <div class="absolute bottom-0 w-full">
+        <button id="logout" class="flex items-center px-6 py-4 text-gray-600 hover:bg-gray-200 w-full"><i class="fas fa-sign-out-alt mr-3"></i> Logout</button>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="flex-1 p-8 overflow-y-auto">
+      <header class="flex justify-between items-center mb-8">
+        <h2 class="text-3xl font-bold">Mark Attendance</h2>
+        <div class="flex items-center">
+          <span class="mr-4">Welcome, Faculty!</span>
+          <img src="https://i.pravatar.cc/40" alt="Avatar" class="w-10 h-10 rounded-full">
+        </div>
+      </header>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <!-- Left column -->
+        <div>
+          <section class="card">
+            <h3 class="card-header">Select Class and Date</h3>
+            <div class="p-6">
+              <select id="classSelect" class="input-field mb-4"></select>
+              <input type="date" id="dateInput" class="input-field mb-4"/>
+              <button id="loadStudents" class="btn btn-secondary mb-4"><i class="fas fa-sync-alt mr-2"></i> Load Students</button>
+              <div id="studentsList" class="space-y-3"></div>
+              <div class="mt-6 flex justify-end">
+                <button id="saveAtt" class="btn btn-success mr-4"><i class="fas fa-save mr-2"></i> Save Attendance</button>
+                <button id="downloadCsv" class="btn btn-info"><i class="fas fa-download mr-2"></i> Download CSV</button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Right column -->
+        <div>
+          <section class="card">
+            <h3 class="card-header">Take Attendance by Face</h3>
+            <div class="p-6">
+              <div id="faceAttendanceCapture" class="my-2">
+                <button type="button" id="startFaceAttendanceCamera" class="btn btn-secondary mb-2"><i class="fas fa-video mr-2"></i> Start Camera</button>
+                <div id="faceAttendanceCameraContainer" class="hidden bg-gray-200 p-4 rounded-lg">
+                  <video id="faceAttendanceVideo" width="320" height="240" autoplay class="rounded-md"></video>
+                  <button type="button" id="captureAndMark" class="btn btn-success mt-4"><i class="fas fa-check-circle mr-2"></i> Capture & Mark</button>
+                  <canvas id="faceAttendanceCanvas" width="320" height="240" class="hidden"></canvas>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+<script>
+const token = localStorage.getItem('token'); if(!token) location.href='/login.html';
+document.getElementById('logout').onclick=()=>{localStorage.clear();location.href='/login.html'};
+
+const BASE_URL = 'http://localhost:5000';
+
+async function api(path, opts={}){
+  opts.headers = opts.headers||{};
+  opts.headers['Content-Type'] = 'application/json';
+  opts.headers['Authorization'] = 'Bearer '+token;
+  if(opts.body) opts.body = JSON.stringify(opts.body);
+
+  let url = path;
+  if (path.startsWith('/api/')) {
+    url = `${BASE_URL}${path}`;
+  }
+  
+  const res = await fetch(url, opts);
+  if(!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function loadClasses() {
+  const cs = await api('/api/classes');
+  const sel = document.getElementById('classSelect');
+  sel.innerHTML = cs.map(c=>`<option value="${c._id}">${c.name}</option>`).join('');
+  return cs;
+}
+
+async function loadStudentsAndAttendance() {
+  const classId = document.getElementById('classSelect').value;
+  const date = document.getElementById('dateInput').value;
+  if (!classId || !date) return;
+  const students = await api('/api/students?classId='+classId);
+  const existing = await fetch('/api/attendance?classId='+classId+'&date='+date,{headers:{'Authorization':'Bearer '+token}}).then(r=>r.ok?r.json():null).catch(()=>null);
+  const list = document.getElementById('studentsList'); list.innerHTML='';
+  students.forEach(s=>{
+    const status = existing && existing.entries.find(e=>String(e.studentId)===String(s._id))?.status || 'Absent';
+    const div = document.createElement('div');
+    div.innerHTML = `<label><span>${s.rollNumber || s.rollNumber} - ${s.name}</span><select data-id="${s._id}"><option ${status==='Present'?'selected':''}>Present</option><option ${status==='Absent'?'selected':''}>Absent</option></select></label>`;
+    list.appendChild(div);
+  });
+}
+
+document.getElementById('loadStudents').onclick = loadStudentsAndAttendance;
+
+document.getElementById('saveAtt').onclick = async ()=>{
+  const classId = document.getElementById('classSelect').value;
+  const date = document.getElementById('dateInput').value;
+  const entries = [...document.querySelectorAll('#studentsList select')].map(s=>({ studentId: s.getAttribute('data-id'), status: s.value }));
+  if (!classId || !date || entries.length === 0) {
+    alert('Please select a class, a date, and load students before saving attendance.');
+    return;
+  }
+  await api('/api/attendance',{method:'POST', body:{classId, date, entries}});
+  alert('Saved');
+};
+
+document.getElementById('downloadCsv').onclick = async () => {
+  const classId = document.getElementById('classSelect').value;
+  const date = document.getElementById('dateInput').value;
+  if (!classId || !date) {
+    alert('Please select a class and date first.');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/attendance/download/${classId}/${date}`, {
+      headers: {
+        'Authorization': 'Bearer ' + token
+      }
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Failed to download CSV');
+    }
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    
+    const disposition = res.headers.get('content-disposition');
+    let filename = 'attendance.csv';
+    if (disposition && disposition.indexOf('attachment') !== -1) {
+        const filenameRegex = /filename[^;=\\n]*=((['"]).*?\\2|[^;\\n]*)/;
+        const matches = filenameRegex.exec(disposition);
+        if (matches != null && matches[1]) { 
+            filename = matches[1].replace(/['"]/g, '');
+        }
+    }
+
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+
+  } catch (error) {
+    alert('Error downloading attendance: ' + error.message);
+  }
+};
+
+const startFaceAttendanceCameraButton = document.getElementById('startFaceAttendanceCamera');
+const faceAttendanceCameraContainer = document.getElementById('faceAttendanceCameraContainer');
+const faceAttendanceVideo = document.getElementById('faceAttendanceVideo');
+const captureAndMarkButton = document.getElementById('captureAndMark');
+const faceAttendanceCanvas = document.getElementById('faceAttendanceCanvas');
+
+async function startAutomatedAttendance() {
+  faceAttendanceCameraContainer.classList.remove('hidden');
+  startFaceAttendanceCameraButton.classList.add('hidden');
+  captureAndMarkButton.classList.add('hidden');
+
+  let stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  faceAttendanceVideo.srcObject = stream;
+
+  const classId = document.getElementById('classSelect').value;
+  const date = document.getElementById('dateInput').value;
+
+  if (!classId || !date) {
+    alert('Please select a class and a date first.');
+    return;
+  }
+
+  setInterval(async () => {
+    faceAttendanceCanvas.getContext('2d').drawImage(faceAttendanceVideo, 0, 0, faceAttendanceCanvas.width, faceAttendanceCanvas.height);
+    const imageData = faceAttendanceCanvas.toDataURL('image/jpeg');
+
+    try {
+      const res = await api('/api/attendance/face', { method: 'POST', body: { classId, imageData, date } });
+      
+      const studentId = res.studentId;
+      const studentSelect = document.querySelector(`#studentsList select[data-id="${studentId}"]`);
+      if (studentSelect) {
+        studentSelect.value = 'Present';
+      }
+      
+      const notif = document.createElement('div');
+      notif.textContent = res.message;
+      notif.className = 'p-2 bg-green-500 rounded mb-2 fixed top-5 right-5';
+      document.body.appendChild(notif);
+      setTimeout(() => notif.remove(), 3000);
+
+    } catch (e) {
+      try {
+        const error = JSON.parse(e.message);
+        console.error('Error marking attendance:', error.error);
+      } catch (parseError) {
+        console.error('Error parsing error message:', e.message);
+      }
+    }
+  }, 5000);
+}
+
+
+async function init() {
+  const dateInput = document.getElementById('dateInput');
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  dateInput.value = `${yyyy}-${mm}-${dd}`;
+
+  await loadClasses();
+  document.getElementById('classSelect').addEventListener('change', loadStudentsAndAttendance);
+  await loadStudentsAndAttendance();
+  
+  document.getElementById('startFaceAttendanceCamera').addEventListener('click', startAutomatedAttendance);
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+Received request for classId: 68c273d46ca855d8112ca596
+Attendance records found: 0
+{"_id":{"$oid":"68bc19f713eb790b66382811"},"date":"2025-09-06","classId":{"$oid":"68bc19b97fdafa6f249908e2"},"__v":{"$numberInt":"0"},"createdAt":{"$date":{"$numberLong":"1757157878534"}},"entries":[{"studentId":{"$oid":"68bc1a0f7fdafa6f249908fa"},"status":"Present"},{"studentId":{"$oid":"68bc19d47fdafa6f249908e8"},"status":"Present"}],"updatedAt":{"$date":{"$numberLong":"1757160272889"}}}

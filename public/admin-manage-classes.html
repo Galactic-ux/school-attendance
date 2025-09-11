@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Manage Classes - Admin Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body class="bg-gray-100 text-gray-800 font-poppins">
+  <div class="flex h-screen">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white shadow-md">
+      <div class="p-6">
+        <h1 class="text-2xl font-bold text-indigo-600">Attendance</h1>
+      </div>
+      <nav class="mt-6">
+        <a href="/admin.html" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-200"><i class="fas fa-user-shield mr-3"></i> Admin Dashboard</a>
+        <a href="/admin-manage-classes.html" class="flex items-center px-6 py-3 text-gray-700 bg-gray-200"><i class="fas fa-users-cog mr-3"></i> Manage Classes</a>
+        <a href="/admin-manage-students.html" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-200"><i class="fas fa-user-edit mr-3"></i> Manage Students</a>
+      </nav>
+      <div class="absolute bottom-0 w-full">
+        <button id="logout" class="flex items-center px-6 py-4 text-gray-600 hover:bg-gray-200 w-full"><i class="fas fa-sign-out-alt mr-3"></i> Logout</button>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="flex-1 p-8 overflow-y-auto">
+      <header class="flex justify-between items-center mb-8">
+        <h2 class="text-3xl font-bold">Manage Classes</h2>
+        <div class="flex items-center">
+          <span class="mr-4">Welcome, Admin!</span>
+          <img src="https://i.pravatar.cc/40" alt="Avatar" class="w-10 h-10 rounded-full">
+        </div>
+      </header>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div>
+          <section class="card">
+            <h3 class="card-header">Create a New Class</h3>
+            <div class="p-6">
+              <input id="className" placeholder="Enter class name" class="input-field mb-4"/>
+              <button id="createClass" class="btn btn-primary">Create Class</button>
+            </div>
+          </section>
+        </div>
+        <div>
+          <section class="card">
+            <h3 class="card-header">Add a New Student</h3>
+            <div class="p-6">
+              <select id="classSelect" class="input-field mb-4"></select>
+              <input id="sname" placeholder="Student name" class="input-field mb-4"/>
+              <input id="sroll" placeholder="Roll number" class="input-field mb-4"/>
+              <div id="faceCapture" class="my-4">
+                <button type="button" id="startCamera" class="btn btn-secondary mb-2"><i class="fas fa-camera mr-2"></i> Capture Face</button>
+                <div id="cameraContainer" class="hidden bg-gray-200 p-4 rounded-lg">
+                  <video id="video" width="320" height="240" autoplay class="rounded-md"></video>
+                  <button type="button" id="clickPhoto" class="btn btn-success mt-4"><i class="fas fa-check mr-2"></i> Take Picture</button>
+                  <canvas id="canvas" width="320" height="240" class="hidden"></canvas>
+                  <img id="photo" src="" alt="Captured photo" class="hidden rounded-md mt-4"/>
+                  <input type="hidden" id="simage" />
+                </div>
+              </div>
+              <button id="addStudent" class="btn btn-primary">Add Student</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+<script>
+const token = localStorage.getItem('token'); if(!token) location.href='/login.html';
+document.getElementById('logout').onclick=()=>{localStorage.clear();location.href='/login.html'};
+
+const BASE_URL = 'http://localhost:5000';
+
+async function api(path, opts={}){
+  opts.headers = opts.headers||{};
+  opts.headers['Content-Type'] = 'application/json';
+  opts.headers['Authorization'] = 'Bearer ' + token;
+  if(opts.body) opts.body = JSON.stringify(opts.body);
+  const res = await fetch(`${BASE_URL}${path}`, opts);
+  if(!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function loadClasses() {
+  const cs = await api('/api/classes');
+  const sel = document.getElementById('classSelect');
+  sel.innerHTML = cs.map(c=>`<option value="${c._id}">${c.name}</option>`).join('');
+}
+
+document.getElementById('createClass').onclick = async ()=>{
+  await api('/api/classes',{method:'POST', body:{name:document.getElementById('className').value}});
+  await loadClasses();
+  alert('Class Created');
+};
+
+const startCameraButton = document.getElementById('startCamera');
+const cameraContainer = document.getElementById('cameraContainer');
+const video = document.getElementById('video');
+const clickPhotoButton = document.getElementById('clickPhoto');
+const canvas = document.getElementById('canvas');
+const photo = document.getElementById('photo');
+const simage = document.getElementById('simage');
+
+startCameraButton.addEventListener('click', async () => {
+  cameraContainer.classList.remove('hidden');
+  startCameraButton.classList.add('hidden');
+  let stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  video.srcObject = stream;
+});
+
+clickPhotoButton.addEventListener('click', () => {
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  let data_url = canvas.toDataURL('image/jpeg');
+  photo.src = data_url;
+  simage.value = data_url;
+  photo.classList.remove('hidden');
+  cameraContainer.classList.add('hidden');
+  video.srcObject.getTracks().forEach(track => track.stop());
+});
+
+document.getElementById('addStudent').onclick = async ()=>{
+  try{
+    const body = {
+      name: document.getElementById('sname').value,
+      rollNumber: document.getElementById('sroll').value,
+      classId: document.getElementById('classSelect').value,
+      imageData: document.getElementById('simage').value
+    };
+    const res = await api('/api/students',{method:'POST', body});
+    alert('Added: ' + res.student.name);
+    document.getElementById('sname').value = '';
+    document.getElementById('sroll').value = '';
+    document.getElementById('simage').value = '';
+    photo.classList.add('hidden');
+    startCameraButton.classList.remove('hidden');
+  }catch(e){
+    alert('Error: '+e.message);
+  }
+};
+
+loadClasses();
+</script>
+</body>
+</html>
